@@ -1,0 +1,56 @@
+# RBAC policy for the HRMS API — the single source of truth (see docs/rbac.md).
+# The policy engine (Day 4) loads this file; tests in tests/test_permissions.py
+# check every persona against it. The LLM never reads or decides this.
+#
+# scope values (widest wins when a user holds several roles):
+#   none < self < team < department < all
+#   team = direct + indirect reportees (walk manager_id down the tree)
+#   "aggregate" = counts/sums only, never one person's row
+
+version: 1
+
+roles:
+  employee:   "Every active employee"
+  manager:    "Has at least one reportee (granted automatically from manager_id)"
+  hr_exec:    "HR Executive, Recruiter"
+  hr_payroll: "Payroll Specialist, HR Head"
+  finance:    "Finance team"
+  it_admin:   "IT Helpdesk"
+  leadership: "CEO and CXOs"
+  ai_service: "Scheduled/event jobs only; chat always runs as the user"
+
+sensitivity:
+  public_internal: "Policies, holidays, org chart, directory basics"
+  internal:        "Phone, attendance, leave history, onboarding"
+  confidential:    "Performance ratings, reviews, manager handbook"
+  restricted:      "Salary, payslips, medical leave reasons, disciplinary"
+
+# resource.action -> role -> scope
+permissions:
+  directory.read:            {employee: all, manager: all, hr_exec: all, hr_payroll: all, finance: all, it_admin: all, leadership: all, ai_service: all}
+  profile.read:              {employee: self, manager: team, hr_exec: all, hr_payroll: all, leadership: all, ai_service: all}
+  profile.update:            {employee: self, hr_exec: all, hr_payroll: all}
+  leave.read:                {employee: self, manager: team, hr_exec: all, hr_payroll: all, leadership: all, ai_service: all}
+  leave.apply:               {employee: self}
+  leave.approve:             {manager: team, hr_exec: all}
+  leave.reason_medical.read: {employee: self, hr_exec: all, hr_payroll: all}
+  attendance.read:           {employee: self, manager: team, hr_exec: all, hr_payroll: all, leadership: aggregate, ai_service: all}
+  salary.read:               {employee: self, hr_payroll: all, finance: aggregate, leadership: all}
+  payslip.read:              {employee: self, hr_payroll: all}
+  performance.read:          {employee: self, manager: team, hr_exec: all, hr_payroll: all, leadership: all}
+  headcount.read:            {manager: team, hr_exec: all, hr_payroll: all, finance: all, leadership: all, ai_service: all}
+  onboarding.create:         {hr_exec: all, ai_service: all}
+  assets.read:               {employee: self, it_admin: all, hr_exec: all}
+  assets.assign:             {it_admin: all}
+  audit_log.read:            {leadership: all}
+
+# Directory shows only these fields to everyone; the rest need profile.read.
+directory_fields: [emp_code, name, email, department, designation, location, manager_name]
+
+# Hard rules the engine enforces regardless of the matrix.
+rules:
+  - "A manager loses team scope over an employee the moment manager_id changes."
+  - "Exited employees are visible to hr_exec, hr_payroll and leadership only."
+  - "Nobody approves their own leave; if the manager is on leave, approval goes to the manager's manager."
+  - "ai_service writes only create approval requests; a human decision executes them."
+  - "Every allow and deny is written to audit_log with acting user and on_behalf_of."

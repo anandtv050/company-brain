@@ -1,0 +1,28 @@
+# secrets
+infra/.env
+.env
+*.pem
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# node
+node_modules/
+dist/
+.next/
+
+# generated data (regenerate with make seed)
+data/out/
+evals/reports/*.json
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
